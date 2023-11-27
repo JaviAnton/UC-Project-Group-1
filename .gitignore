@@ -1,2 +1,5 @@
 cache/
 .ipynb_checkpoints/
+data/test/all_data_r1_d1_w1_30min.npz
+data/test/geo_affinity.npy
+data/test/OD_affinity.npy
