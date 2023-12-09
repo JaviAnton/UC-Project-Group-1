@@ -6,3 +6,5 @@ data/test/OD_affinity.npy
 data/test/comptage-velo-donnees-compteurs.csv
 data/tripParisVis-main/
 data test/
+test.ipynb
+__pycache__/
