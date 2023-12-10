@@ -8,3 +8,4 @@ data/tripParisVis-main/
 data test/
 test.ipynb
 __pycache__/
+test_heatmap.png

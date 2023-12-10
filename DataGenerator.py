@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class DataGenerator:
-    def __init__(self,G=None,data=None,gdf_nodes_edges=None,clip_dates=True):
+    def __init__(self,G=None,data=None,gdf_nodes_edges=None,node_masks=None,clip_dates=True):
         
         if data:
             self.data,self.station_data=data
@@ -32,12 +32,19 @@ class DataGenerator:
             print("Linking stations to nodes...")
             self.link_stations_to_nodes()
 
+        if node_masks:
+            self.node_masks,self.reduced_node_masks=node_masks
+        else:
+            print("Generating node masks...")
+            self.generate_node_masks()
+
         self.T=[]
 
         #Save the parsed data for repeating the initialization fast
         self.last_init_data={'data':(self.data,self.station_data),
                              'G':self.G,
-                             'gdf_nodes_edges': (self.gdf_nodes,self.gdf_edges)}
+                             'gdf_nodes_edges': (self.gdf_nodes,self.gdf_edges),
+                             'node_masks':(self.node_masks,self.reduced_node_masks)}
 
         
 
@@ -104,12 +111,17 @@ class DataGenerator:
 
             except nx.exception.NetworkXNoPath:
                 if debug:
-                    print(f"Repeating {len(self.T)}th trajectory... (disconnected)")
+                    print(f"-> Repeating {len(self.T)}th trajectory... (disconnected)")
                 else:
                     pass
             except IndexError:
                 if debug:
-                    print(f"Repeating {len(self.T)}th trajectory... (same node)")
+                    print(f"-> Repeating {len(self.T)}th trajectory... (same node)")
+                else:
+                    pass
+            except ValueError:
+                if debug:
+                    print(f"-> Repeating {len(self.T)}th trajectory... (probability float overflow)")
                 else:
                     pass
 
@@ -145,13 +157,16 @@ class DataGenerator:
     def get_p(self,date):
         """
         Retrieves the nodes and relative frequency of counts for a given date,
-        using only the nodes with a counter.
-        *Note that all dates don't have info for all counters, need to use the returned nodes
+        using the node distance mask to the counters.
         """
         date_subdata=self.data[self.data["date"].values==date]
         counts=date_subdata.groupby("id")['counts'].sum()
 
-        nodes=self.station_data.loc[counts.index,"closest_node"].to_list()
+        counts=counts.reindex(self.reduced_node_masks.columns).fillna(0)
+        counts=(self.reduced_node_masks @ counts)/self.reduced_node_masks.sum(axis=1)
+        counts=counts[~counts.isna()]
+
+        nodes=counts.index.to_list()
         p=self.probability_from_counts(counts)
         return nodes,p
 
@@ -231,6 +246,21 @@ class DataGenerator:
         for station,X,Y in self.station_data[['lon','lat']].itertuples():
             d2=(self.gdf_nodes['x']-X)**2+self.lat_factor*(self.gdf_nodes['y']-Y)**2
             self.station_data.loc[station,'closest_node']=d2.idxmin()
+    
+    def generate_node_masks(self,d0=1):
+        self.node_masks=pd.DataFrame(index=self.gdf_nodes.index,columns=self.station_data.index).fillna(0)
+        for station,X,Y in self.station_data[['lon','lat']].itertuples():
+            d2=(self.gdf_nodes['x']-X)**2+self.lat_factor*(self.gdf_nodes['y']-Y)**2
+            d2*=(np.pi/180**2)
+            d=6371*np.sqrt(d2)
+
+            #Gaussian filter (more related to closest)
+            g=np.exp(-np.power(d/(d0/3), 2.)/2.)
+            #Absoute filter (cut all weights beyond d0)
+            f=d<d0
+
+            self.node_masks[station]=g*f
+        self.reduced_node_masks=self.node_masks[(self.node_masks.sum(axis=1)!=0)]
 
     def load_map(self):
         self.G = ox.graph_from_place('Paris, France', network_type='bike',simplify=False,retain_all=False)
@@ -264,35 +294,56 @@ class DataGenerator:
         """
         p=np.array(counts)/sum(counts)
         p=list(p)
-        p[-1] = 1 - sum(p[0:-1]) #subtraction round errors smaller than normalization round errors.
+        imax=np.argmax(p)
+        p[imax] = 1 - sum(p[0:imax])-sum(p[imax+1:]) #subtraction round errors smaller than normalization round errors.
         return p
 
-    def plot_heatmap(self,show_non_traversed=True,show_stations=False,**kwargs):
+    def plot_heatmap(self,show_non_traversed=True,
+                     show_stations=False,
+                     show_start=False,show_end=False,
+                     bkg_color="black",dpi=100,**kwargs):
+        
         edge_counts=self.gdf_edges.copy()
         edge_counts["counts"]=0
-
+        
+        start_nodes=[];end_nodes=[]
         for track in self.T:
-            edges=np.unique([(n1,n2) for _,n1,n2,_ in track])
+            
+            edges=list(set([(n1,n2) for _,n1,n2,_ in track]))
             edge_counts.loc[edges,"counts"]+=1
 
-        fig = plt.figure(figsize=(8,6))
+            start_nodes.append(track[0][1])
+            end_nodes.append(track[-1][2])
+
+        fig = plt.figure(figsize=(8,6),dpi=dpi)
         ax = plt.axes()
 
         edges_traversed=edge_counts[edge_counts["counts"].values>0]
         edges_not_traversed=edge_counts[edge_counts["counts"].values==0]
 
+        #Plots:
+
         if show_non_traversed:
             edges_not_traversed.plot(ax=ax, legend=False, color='#999999',linewidth=0.2,zorder=-1)
 
-        edges_traversed.plot(ax=ax, column="counts",cmap='cool',linewidth=1/4,zorder=0,**kwargs)
+        edges_traversed.plot(ax=ax, column="counts",linewidth=2/3,zorder=0,**kwargs)
 
         if show_stations:
-            self.station_data.plot.scatter(x="lon",y="lat",ax=ax,c="red",s=2,zorder=1)#,label="stations")
+            self.station_data.plot.scatter(x="lon",y="lat",ax=ax,c="red",s=2,zorder=2)#,label="stations")
+
+        if show_start:
+            self.gdf_nodes.loc[start_nodes].plot.scatter(ax=ax,x='x',y='y',c="lime",s=2,zorder=1)
+
+        if show_end:
+            self.gdf_nodes.loc[end_nodes].plot.scatter(ax=ax,x='x',y='y',c="green",s=2,zorder=1)
+        
         # fig.colorbar(cm.ScalarMappable(norm=None, cmap='cool'),ax=ax,orientation='horizontal')
 
-        ax.set(facecolor = "black")
+        ax.set(facecolor = bkg_color)
         plt.xticks([])
         plt.xlabel('')
         plt.yticks([])
         plt.ylabel('')
         ax.set_title("Heatmap of trajectories")#, fontsize=20)
+
+        return fig,ax
