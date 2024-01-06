@@ -200,7 +200,7 @@ class DataGenerator:
 
     def load_data(self,clip_dates=False,path=None):
         if not path:
-            path='data/test/comptage-velo-donnees-compteurs.csv'
+            path='data/comptage-velo-donnees-compteurs.csv'
         raw_data=pd.read_csv(path,sep=";")
 
         data=raw_data.loc[:,["id","sum_counts","date","coordinates"]]
@@ -301,7 +301,7 @@ class DataGenerator:
         p[imax] = 1 - sum(p[0:imax])-sum(p[imax+1:]) #subtraction round errors smaller than normalization round errors.
         return p
 
-    def plot_heatmap(self,show_non_traversed=True,
+    def plot_heatmap(self,T=None,show_non_traversed=True,
                      show_stations=False,
                      show_start=False,show_end=False,
                      bkg_color="black",dpi=100,**kwargs):
@@ -310,7 +310,9 @@ class DataGenerator:
         edge_counts["counts"]=0
         
         start_nodes=[];end_nodes=[]
-        for track in self.T:
+        if not T:
+            T=self.T
+        for track in T:
             
             edges=list(set([(n1,n2) for _,n1,n2,_ in track]))
             edge_counts.loc[edges,"counts"]+=1
@@ -350,3 +352,11 @@ class DataGenerator:
         ax.set_title("Heatmap of trajectories")#, fontsize=20)
 
         return fig,ax
+
+if __name__=="__main__":
+    data_path="data/test/comptage-velo-donnees-compteurs.csv"
+    data_gen=DataGenerator(data_path=data_path)
+    data_gen.track_generator(n_tracks=50,debug=True)
+    fig,ax=data_gen.plot_heatmap(show_non_traversed=True,show_stations=False,show_start=False,show_end=False,
+                                legend=False,cmap='hot',bkg_color='w',dpi=300)
+    plt.show()
