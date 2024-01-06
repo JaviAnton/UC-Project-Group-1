@@ -9,3 +9,4 @@ data test/
 test.ipynb
 __pycache__/
 test_heatmap.png
+final/data/comptage-velo-donnees-compteurs.csv
