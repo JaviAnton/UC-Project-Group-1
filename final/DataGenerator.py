@@ -85,6 +85,7 @@ class DataGenerator:
         available_hours=[*range(start_h,end_h+1)]
 
         self.T=[]
+        self.T_as_path=[]
         max_counts=n_tracks*max_iter_factor
         counts=0
         while len(self.T)<n_tracks:
@@ -100,6 +101,7 @@ class DataGenerator:
                 
                 orig, dest = self.node_selector(date,**kwargs)
                 track=nx.shortest_path(self.G, orig, dest, weight='length')
+                self.T_as_path.append(self.nodes_to_edges(track))
 
                 # if len(track)<2:
                 #     print("orig,dest:",orig,dest)
@@ -133,8 +135,7 @@ class DataGenerator:
 
         if debug:
             print("Generation done.")
-        self.T
-        return self.T
+        return self.T, self.T_as_path
     
     def edges_to_nodes(self,track):
         return [edge[0] for edge in track]
