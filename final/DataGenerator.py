@@ -733,6 +733,52 @@ class DataGenerator2:
         ax.set_title("Heatmap of trajectories")#, fontsize=20)
 
         return fig,ax
+    
+    def plot_tracks(self,tracks,
+                    title="Trajectories",
+                    show_non_traversed=True,
+                    linewidth=1,
+                    node_size=2,
+                    colors='r',
+                    show_start=False,show_end=False,
+                    bkg_color="black",dpi=100,**kwargs):
+        
+        if type(colors)!=list:
+            colors=[colors]*len(tracks)
+
+        fig = plt.figure(figsize=(8,6),dpi=dpi)
+        ax = plt.axes()
+
+        #Plots:
+
+        for track,c in zip(tracks,colors):
+            if show_start:
+                n=track[0]
+                ax.scatter(self.G.nodes[n]["x"], self.G.nodes[n]["y"],c=c,s=node_size,edgecolor='k',linewidth=0.5,zorder=2)
+
+            if show_end:
+                n=track[-1]
+                ax.scatter(self.G.nodes[n]["x"], self.G.nodes[n]["y"],c=c,s=node_size,edgecolor='k',linewidth=0.5,zorder=2)
+            
+            x = []
+            y = []
+            for u, v in zip(track[:-1], track[1:]):
+                # if there are parallel edges, select the shortest in length
+                x.extend((self.G.nodes[u]["x"], self.G.nodes[v]["x"]))
+                y.extend((self.G.nodes[u]["y"], self.G.nodes[v]["y"]))
+            ax.plot(x, y, c=c, lw=linewidth, alpha=1,zorder=1)
+
+        if show_non_traversed:
+            self.gdf_edges.plot(ax=ax, legend=False, color='#999999',linewidth=0.2,zorder=-1)
+
+        ax.set(facecolor = bkg_color)
+        plt.xticks([])
+        plt.xlabel('')
+        plt.yticks([])
+        plt.ylabel('')
+        ax.set_title(title)#, fontsize=20)
+
+        return fig,ax
 
 if __name__=="__main__":
     data_path="data/test/comptage-velo-donnees-compteurs.csv"
