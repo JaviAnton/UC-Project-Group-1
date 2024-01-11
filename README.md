@@ -21,7 +21,7 @@ To run this project, please follow these steps:
 3. **Run Experiments**
     Run "main.ipynb" for the route recovery and trajectory clustering.
 
-
+* The "Archived" folder contains all the code and data we have implemented during the project, but not used in the final version of the project.
 
 ## Contact
 - Óscar Nebreda Bernal: s3434745@vuw.leidenuniv.nl
